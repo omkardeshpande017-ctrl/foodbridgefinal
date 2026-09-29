@@ -1,0 +1,13 @@
+{
+  "name": "foodbridge-platform",
+  "private": true,
+  "version": "2.0.0",
+  "scripts": {
+    "install-all": "npm --prefix backend install && npm --prefix frontend install",
+    "backend": "npm --prefix backend run dev",
+    "frontend": "npm --prefix frontend run dev",
+    "dev": "bash -c 'npm --prefix backend run dev & npm --prefix frontend run dev & wait'",
+    "seed": "npm --prefix backend run seed",
+    "setup": "npm run install-all && npm run seed"
+  }
+}
