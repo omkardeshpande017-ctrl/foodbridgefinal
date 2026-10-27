@@ -94,7 +94,7 @@ else console.log('DEMO_MODE on — using the in-memory store (no database)');
 
 // On Vercel the app is exported instead of listening on a port.
 if (process.env.VERCEL) {
-  module.exports = app;
+  // exported below as an ES module default
 } else {
   app.listen(port, () => console.log(`FoodBridge API running on http://localhost:${port}`));
   process.on('unhandledRejection', (r) => console.error('[unhandledRejection]', r));
