@@ -1,7 +1,15 @@
 {
-  "framework": "vite",
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "installCommand": "npm install --no-audit --no-fund",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "npm install --no-audit --no-fund && cd frontend && npm install --no-audit --no-fund && cd ../backend && npm install --no-audit --no-fund",
+  "buildCommand": "cd frontend && npm run build",
+  "outputDirectory": "frontend/dist",
+  "rewrites": [
+    { "source": "/api", "destination": "/api/index" },
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/((?!api(?:/|$)).*)", "destination": "/index.html" }
+  ],
+  "functions": {
+    "api/index.js": { "maxDuration": 30, "includeFiles": "{backend/**/*,api/package.json}" }
+  }
 }
