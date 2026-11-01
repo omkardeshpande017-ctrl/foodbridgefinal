@@ -10,7 +10,8 @@
 //   JWT_SECRET    32+ character random secret (no default: the API refuses to boot without it)
 //   CLIENT_URL    allowed frontend origin(s), comma separated
 //   ADMIN_EMAIL / ADMIN_PASSWORD / ADMIN2_EMAIL / ADMIN2_PASSWORD  used by the seed script only
-process.env.VERCEL = process.env.VERCEL || '1';
+if (process.env.VERCEL === '1') process.env.VERCEL = '1';
+else process.env.VERCEL = process.env.VERCEL || '1';
 process.env.NODE_ENV = process.env.NODE_ENV || 'production';
 
 const { default: app } = await import('../backend/src/server.js');
