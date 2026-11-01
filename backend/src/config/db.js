@@ -18,10 +18,14 @@ export async function connectDB() {
   }
   if (cached.conn && mongoose.connection.readyState === 1) return true;
   if (!cached.promise) {
+    // Atlas / DocumentDB style hosts need TLS; a local Docker Mongo does not, and
+    // the driver's own defaults are kept for it (no forced TLS on plain hosts).
+    const isSrv = uri.startsWith('mongodb+srv://');
     cached.promise = mongoose
       .connect(uri, {
         serverSelectionTimeoutMS: 8000,
-        maxPoolSize: 10
+        maxPoolSize: 10,
+        ...(isSrv ? { tls: true } : {})
       })
       .then((m) => m)
       .catch((e) => {
