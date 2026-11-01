@@ -50,6 +50,53 @@ r.get('/summary', auth, async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/analytics/public — anonymous aggregate counts for the landing page.
+// No personal data, no per-user figures: only totals the marketing page shows.
+// ---------------------------------------------------------------------------
+r.get('/public', async (req, res) => {
+  try {
+    const [donations, users] = await Promise.all([
+      Donation.find().select('quantity peopleServed co2Saved status createdAt deliveredAt').lean(),
+      User.find().select('role status verification').lean()
+    ]);
+    const delivered = donations.filter((d) => d.status === 'delivered');
+    const today = new Date();
+    const monthly = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(today.getFullYear(), today.getMonth() - (5 - i), 1);
+      const start = d.getTime();
+      const end = new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime();
+      const inMonth = donations.filter((x) => {
+        const t = new Date(x.createdAt).getTime();
+        return t >= start && t < end;
+      });
+      return {
+        month: d.toLocaleString('en-US', { month: 'short' }),
+        quantity: Math.round(inMonth.reduce((s, x) => s + (x.quantity || 0), 0)),
+        delivered: Math.round(
+          inMonth.filter((x) => x.status === 'delivered').reduce((s, x) => s + (x.quantity || 0), 0)
+        )
+      };
+    });
+    const roleCount = (role, extra = () => true) => users.filter((u) => u.role === role && extra(u)).length;
+    res.set('Cache-Control', 'public, max-age=60');
+    res.json({
+      totalFood: Math.round(donations.reduce((s, d) => s + (d.quantity || 0), 0)),
+      peopleServed: donations.reduce((s, d) => s + (d.peopleServed || 0), 0),
+      co2Saved: Math.round(donations.reduce((s, d) => s + (d.co2Saved || 0), 0)),
+      deliveries: delivered.length,
+      successRate: donations.length ? Math.round((delivered.length / donations.length) * 100) : 0,
+      activeDonors: roleCount('donor', (u) => u.status === 'active'),
+      verifiedNgos: roleCount('ngo', (u) => u.verification?.status === 'verified'),
+      activeVolunteers: roleCount('volunteer', (u) => u.status === 'active'),
+      monthly
+    });
+  } catch (e) {
+    console.error('analytics public', e);
+    res.status(500).json({ message: 'Could not load public figures' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/analytics/overview — network-wide dashboard data.
 // ---------------------------------------------------------------------------
 r.get('/overview', auth, async (req, res) => {
