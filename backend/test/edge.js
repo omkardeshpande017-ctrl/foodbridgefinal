@@ -90,7 +90,10 @@ const reg = async (role) =>
   console.log('\nSystem');
   const health = await call('GET', '/health');
   ok('health reports database state', health.status === 200 && !!health.data?.database);
-  ok('security headers on every response', health.headers.get('x-content-type-options') === 'nosniff');
+  ok(
+    'security headers on every response',
+    String(health.headers.get('x-content-type-options') || '').toLowerCase().includes('nosniff')
+  );
   ok('unknown route returns JSON 404', (await call('GET', '/does-not-exist')).status === 404);
 
   console.log(`\n${pass} passed, ${failures.length} failed`);

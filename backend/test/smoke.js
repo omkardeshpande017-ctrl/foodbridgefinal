@@ -262,8 +262,14 @@ const register = async (name, role) => {
   const version = await call('GET', '/version');
   ok('version endpoint', version.status === 200 && version.data?.api === 'v1');
 
+  // Read the raw header value: a reverse proxy (nginx in the Docker stack) or a
+  // CDN may merge duplicate headers into a comma separated list.
   const headers = await fetch(`${base}/health`);
-  ok('security headers present', headers.headers.get('x-content-type-options') === 'nosniff' && !!headers.headers.get('x-frame-options'));
+  const headerHas = (name, value) => String(headers.headers.get(name) || '').toLowerCase().includes(value);
+  ok(
+    'security headers present',
+    headerHas('x-content-type-options', 'nosniff') && headerHas('x-frame-options', 'deny')
+  );
 
   const publicReport = await call('POST', '/reports', {
     token: donorToken,
