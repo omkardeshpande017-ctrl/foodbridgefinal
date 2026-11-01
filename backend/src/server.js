@@ -4,6 +4,8 @@ import cors from 'cors';
 import morgan from 'morgan';
 import mongoose from 'mongoose';
 import { connectDB } from './config/db.js';
+import { securityHeaders } from './middleware/security.js';
+import Setting from './models/Setting.js';
 
 import auth from './routes/auth.js';
 import donations from './routes/donations.js';
@@ -53,6 +55,7 @@ app.use(
   })
 );
 
+app.use(securityHeaders);
 app.use(express.json({ limit: '5mb' }));
 if (process.env.NODE_ENV !== 'production') app.use(morgan('dev'));
 
@@ -76,6 +79,23 @@ app.use('/api/auth', (req, res, next) => {
   }
   if (attempts.size > 5000) attempts.clear();
   return next();
+});
+
+// Readiness: reports 503 while the database is unreachable, so orchestrators and
+// uptime monitors can distinguish "process up" from "able to serve traffic".
+app.get('/api/ready', (req, res) => {
+  const ready = mongoose.connection.readyState === 1;
+  res.status(ready ? 200 : 503).json({ ready, database: ready ? 'connected' : 'disconnected' });
+});
+
+app.get('/api/version', (req, res) => {
+  res.json({
+    api: 'v1',
+    service: 'FoodBridge API',
+    version: process.env.npm_package_version || '2.2.0',
+    commit: process.env.GIT_COMMIT || process.env.VERCEL_GIT_COMMIT_SHA || 'unknown',
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
 app.get('/api/health', async (req, res) => {

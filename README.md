@@ -11,6 +11,20 @@ MongoDB persistence, JWT authentication with role-based authorisation — not a 
 | Database | MongoDB 7 (local Docker/mongod or MongoDB Atlas) |
 | Deployment | Vercel (frontend + serverless API) or Docker Compose, plus a managed MongoDB |
 
+## Platform capabilities
+
+| Area | What is implemented |
+|---|---|
+| Donations | create / edit / delete, category, quantity, expiry validation, pickup details, optional photo (≤1.5 MB), pagination, search, filters |
+| Lifecycle | `available → accepted → picked_up → in_transit → delivered`, plus `expired` and `cancelled`; atomic, duplicate-safe acceptance; timestamped history per transition |
+| Expiry | `expiresAt` computed from the expiry/pickup time; stale donations are auto-expired on read and cannot be accepted |
+| Roles | donor, NGO (verified), volunteer, single administrator provisioned by seed |
+| Admin | user directory, NGO verification, suspend/activate, disputes triage, audit log, platform settings, impact report |
+| Security | bcrypt(12), JWT with DB-backed revalidation, role guards, CORS allow-list, security headers, auth rate limiting, input validation, audit trail, no client-supplied roles |
+| Analytics | role-scoped summary, network overview, 7-day trend, 6-month monthly trend, success rate — all from real collections |
+| Notifications | in-app with dedupe keys, mark-one/mark-all |
+| Reliability | `/api/health`, `/api/ready` (503 when DB is down), `/api/version`, structured audit log, Docker healthchecks |
+
 ## Features
 
 - **Donor dashboard** — post donations (food, quantity, safety window, pickup details), track every

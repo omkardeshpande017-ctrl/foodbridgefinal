@@ -7,7 +7,7 @@ export default function Requests(){
   const [busy,setBusy]=useState('');
 
   async function load(){
-    try{setError('');setRows(await api.donations('?mine=true'))}
+    try{setError('');setRows(await api.donations({mine:'true',limit:100}).then(r=>r.items||[]))}
     catch(err){setError(err.message||'Could not load your accepted requests.')}
     finally{setLoading(false)}
   }

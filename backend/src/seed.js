@@ -23,7 +23,7 @@ const upsertUser = async ({ name, email, password, role, location = 'Pune', orga
   const normalizedEmail = email.trim().toLowerCase();
   let user = await User.findOne({ email: normalizedEmail });
   const passwordHash = await bcrypt.hash(password, 12);
-  if (!user) user = await User.create({ name, email: normalizedEmail, passwordHash, role, location, organization, status: 'active' });
+  if (!user) user = await User.create({ name, email: normalizedEmail, passwordHash, role, location, organization, status: 'active', verification: { status: 'not_required' } });
   else {
     // Only the configured administrator is forcibly synchronized. Existing non-admin passwords and data remain untouched.
     if (role === 'admin') { user.name = name; user.passwordHash = passwordHash; user.role = 'admin'; user.status = 'active'; await user.save(); }
@@ -48,6 +48,10 @@ if (process.env.SEED_SAMPLE_USERS === 'true') {
     if (!existing) {
       const password = randomPassword();
       existing = await upsertUser({ ...def, password, location: 'Pune' });
+      if (def.role === 'ngo') {
+        existing.verification = { status: 'verified', reviewedAt: new Date() };
+        await existing.save();
+      }
       demoUsers.push({ email: def.email, password, role: def.role });
     }
   }

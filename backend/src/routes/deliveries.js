@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import Delivery from '../models/Delivery.js';
 import Donation from '../models/Donation.js';
 import Notification from '../models/Notification.js';
+import { audit } from '../utils/audit.js';
 import { auth, roles } from '../middleware/auth.js';
 
 const r = Router();
@@ -62,9 +63,11 @@ r.post('/', auth, roles('admin', 'ngo'), async (req, res) => {
         userId: delivery.volunteerId,
         title: 'New pickup assigned',
         message: `${donation.foodName} — pickup at ${delivery.pickup || 'the donor location'}.`,
-        type: 'info'
+        type: 'info',
+        dedupeKey: `delivery:${delivery._id}:assigned`
       });
     }
+    await audit(req, 'delivery.create', { entity: 'Delivery', entityId: delivery._id, meta: { donationId } });
     res.status(201).json(delivery);
   } catch (e) {
     console.error('delivery create', e);
@@ -94,7 +97,13 @@ r.patch('/:id', auth, roles('volunteer', 'admin', 'ngo'), async (req, res) => {
       // Delivery progress drives the donation status so both views stay in sync.
       const donation = await Donation.findById(delivery.donationId);
       if (donation) {
-        donation.status = status === 'assigned' ? 'accepted' : status;
+        const nextStatus = status === 'assigned' ? 'accepted' : status;
+        if (donation.status !== nextStatus) {
+          donation.history.push({ status: nextStatus, at: new Date(), by: req.user.id, byRole: req.user.role, note: 'Updated from delivery' });
+        }
+        donation.status = nextStatus;
+        if (status === 'picked_up') donation.pickedUpAt = new Date();
+        if (status === 'delivered') donation.deliveredAt = new Date();
         if (!donation.volunteerId && delivery.volunteerId) donation.volunteerId = delivery.volunteerId;
         await donation.save();
         if (donation.donorId) {
@@ -102,11 +111,13 @@ r.patch('/:id', auth, roles('volunteer', 'admin', 'ngo'), async (req, res) => {
             userId: donation.donorId,
             title: 'Delivery updated',
             message: `${donation.foodName}: ${status.replace('_', ' ')}.`,
-            type: status === 'delivered' ? 'success' : 'info'
+            type: status === 'delivered' ? 'success' : 'info',
+            dedupeKey: `delivery:${delivery._id}:${status}`
           });
         }
       }
     }
+    await audit(req, 'delivery.update', { entity: 'Delivery', entityId: delivery._id, meta: { status } });
     res.json(delivery);
   } catch (e) {
     console.error('delivery update', e);

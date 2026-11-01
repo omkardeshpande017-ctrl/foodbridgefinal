@@ -90,7 +90,9 @@ const register = async (name, role) => {
       quantity: 20,
       unit: 'kg',
       pickupLocation: 'Kothrud, Pune',
-      pickupDate: new Date().toISOString().slice(0, 10),
+      // Pickup must be in the future: a same-day pickup would already be past
+      // its expiry instant and the API would (correctly) refuse acceptance.
+      pickupDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
       pickupTime: '12:30',
       description: 'Created by the automated test suite'
     }
@@ -111,13 +113,30 @@ const register = async (name, role) => {
   ok('invalid donation rejected', invalid.status === 400);
 
   const donorList = await call('GET', '/donations', { token: donorToken });
-  ok('donor sees their donation', donorList.data?.some((d) => d._id === donationId));
+  ok('donor sees their donation', (donorList.data?.items || []).some((d) => d._id === donationId));
 
   const donorAccepts = await call('POST', `/donations/${donationId}/accept`, { token: donorToken });
   ok('donor cannot accept a donation', donorAccepts.status === 403);
 
+  const adminLogin0 = process.env.ADMIN_EMAIL
+    ? await call('POST', '/auth/login', { body: { email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD } })
+    : { data: null };
+  const adminToken0 = adminLogin0.data?.token;
+
+  if (adminToken0) {
+    const verify = await call('PATCH', `/users/${ngo.data.user.id}/verification`, {
+      token: adminToken0,
+      body: { status: 'verified' }
+    });
+    ok('admin verifies the NGO', verify.status === 200 && verify.data?.verification?.status === 'verified');
+  } else {
+    const blocked = await call('POST', `/donations/${donationId}/accept`, { token: ngoToken });
+    ok('unverified NGO cannot accept', blocked.status === 403);
+    console.log('  · set ADMIN_EMAIL/ADMIN_PASSWORD to run the verification flow');
+  }
+
   const accepted = await call('POST', `/donations/${donationId}/accept`, { token: ngoToken });
-  ok('ngo accepts the donation', accepted.status === 200 && accepted.data?.status === 'accepted');
+  ok('ngo accepts the donation', accepted.status === 200 && accepted.data?.status === 'accepted', JSON.stringify(accepted.data).slice(0, 200));
   ok('accepting records the NGO', !!accepted.data?.ngoId);
 
   const doubleAccept = await call('POST', `/donations/${donationId}/accept`, { token: ngoToken });
@@ -128,11 +147,12 @@ const register = async (name, role) => {
     token: ngoToken,
     body: { donationId, volunteerId, pickup: 'Kothrud, Pune', dropoff: 'NGO Distribution Hub' }
   });
-  ok('ngo assigns a volunteer', delivery.status === 201 && !!delivery.data?._id);
+  ok('ngo assigns a volunteer', delivery.status === 201 && !!delivery.data?._id, JSON.stringify(delivery.data).slice(0, 200));
   const deliveryId = delivery.data?._id;
 
   const tasks = await call('GET', '/deliveries', { token: volunteerToken });
-  ok('volunteer sees the assigned task', tasks.data?.some((t) => t._id === deliveryId));
+  const taskList = Array.isArray(tasks.data) ? tasks.data : tasks.data?.items || [];
+  ok('volunteer sees the assigned task', taskList.some((t) => t._id === deliveryId), JSON.stringify(tasks.data).slice(0, 160));
 
   const donorSeesDelivery = await call('PATCH', `/deliveries/${deliveryId}`, {
     token: donorToken,
@@ -146,10 +166,10 @@ const register = async (name, role) => {
   }
 
   const delivered = await call('GET', '/donations?status=delivered', { token: donorToken });
-  ok('donation follows the delivery to delivered', delivered.data?.some((d) => d._id === donationId));
+  ok('donation follows the delivery to delivered', (delivered.data?.items || []).some((d) => d._id === donationId));
 
   const notifications = await call('GET', '/notifications', { token: donorToken });
-  ok('donor received notifications', (notifications.data?.length || 0) >= 2);
+  ok('donor received notifications', (notifications.data?.items?.length || 0) >= 2);
 
   console.log('\nAnalytics & reports');
   const summary = await call('GET', '/analytics/summary', { token: donorToken });
@@ -175,10 +195,72 @@ const register = async (name, role) => {
     ok('admin login', adminLogin.status === 200 && adminLogin.data?.user?.role === 'admin');
     if (adminLogin.data?.token) {
       const adminUsers = await call('GET', '/users', { token: adminLogin.data.token });
-      ok('admin lists users', adminUsers.status === 200 && Array.isArray(adminUsers.data));
+      ok('admin lists users', adminUsers.status === 200 && Array.isArray(adminUsers.data?.items));
       const reports = await call('GET', '/reports/summary', { token: adminLogin.data.token });
       ok('admin reads reports', reports.status === 200 && typeof reports.data?.donations === 'number');
     }
+  }
+
+  console.log('\nLifecycle, history & pagination');
+  const withHistory = await call('GET', `/donations/${donationId}`, { token: donorToken });
+  const hist = withHistory.data?.history || [];
+  ok('status history recorded', hist.length >= 4 && hist.some((h) => h.status === 'delivered'));
+  ok('timestamps recorded on delivery', !!withHistory.data?.deliveredAt);
+
+  const page = await call('GET', '/donations?limit=2&page=1', { token: donorToken });
+  ok('pagination metadata returned', page.data?.limit === 2 && typeof page.data?.pages === 'number');
+
+  const edit = await call('PATCH', `/donations/${donationId}`, { token: donorToken, body: { foodName: 'Edited after delivery' } });
+  ok('delivered donation cannot be edited', edit.status === 409);
+
+  const newDonation = await call('POST', '/donations', {
+    token: donorToken,
+    body: { foodName: 'Editable meal', quantity: 5, unit: 'kg', pickupLocation: 'Kothrud' }
+  });
+  const edited = await call('PATCH', `/donations/${newDonation.data._id}`, { token: donorToken, body: { quantity: 9 } });
+  ok('donation can be edited while available', edited.status === 200 && edited.data?.quantity === 9);
+  const cancelled = await call('PATCH', `/donations/${newDonation.data._id}/status`, { token: donorToken, body: { status: 'cancelled' } });
+  ok('donor cancels their donation', cancelled.status === 200 && cancelled.data?.status === 'cancelled');
+
+  const expired = await call('POST', '/donations', {
+    token: donorToken,
+    body: { foodName: 'Past expiry', quantity: 3, pickupLocation: 'Kothrud', expiryTime: '2020-01-01T10:00' }
+  });
+  ok('past expiry rejected', expired.status === 400);
+
+  console.log('\nPlatform & security');
+  const ready = await call('GET', '/ready');
+  ok('readiness endpoint', ready.status === 200 && ready.data?.ready === true);
+  const version = await call('GET', '/version');
+  ok('version endpoint', version.status === 200 && version.data?.api === 'v1');
+
+  const headers = await fetch(`${base}/health`);
+  ok('security headers present', headers.headers.get('x-content-type-options') === 'nosniff' && !!headers.headers.get('x-frame-options'));
+
+  const publicReport = await call('POST', '/reports', {
+    token: donorToken,
+    body: { subject: 'Test dispute', description: 'Raised by the automated test suite', category: 'delivery' }
+  });
+  ok('user raises a report', publicReport.status === 201 && !!publicReport.data?._id);
+  const reportListForbidden = await call('GET', '/reports', { token: donorToken });
+  ok('non-admin cannot read the report queue', reportListForbidden.status === 403);
+
+  if (adminToken0) {
+    const auditLog = await call('GET', '/analytics/audit?limit=5', { token: adminToken0 });
+    ok('audit log populated', auditLog.status === 200 && (auditLog.data?.total || 0) > 0);
+    const settings = await call('GET', '/analytics/settings', { token: adminToken0 });
+    ok('platform settings readable', settings.status === 200 && !!settings.data?.platformName);
+    const patched = await call('PATCH', '/analytics/settings', { token: adminToken0, body: { supportEmail: 'support@foodbridge.test' } });
+    ok('platform settings updatable', patched.status === 200 && patched.data?.supportEmail === 'support@foodbridge.test');
+    const triage = await call('PATCH', `/reports/${publicReport.data?._id}`, {
+      token: adminToken0,
+      body: { status: 'resolved', resolution: 'Handled by test' }
+    });
+    ok('admin resolves a report', triage.status === 200 && triage.data?.status === 'resolved');
+    const suspend = await call('PATCH', `/users/${donor.data.user.id}/status`, { token: adminToken0, body: { status: 'suspended' } });
+    ok('admin suspends an account', suspend.status === 200 && suspend.data?.status === 'suspended');
+    const blockedLogin = await call('POST', '/auth/login', { body: { email: donor.email, password } });
+    ok('suspended user cannot log in', blockedLogin.status === 401);
   }
 
   console.log(`\n${pass} passed, ${failures.length} failed`);

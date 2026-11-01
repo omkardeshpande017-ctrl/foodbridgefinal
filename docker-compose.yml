@@ -1,17 +1,23 @@
+# FoodBridge — full local stack
+#   JWT_SECRET=$(openssl rand -hex 32) docker compose up -d --build
+#   docker compose exec api node src/seed.js
 services:
   mongo:
     image: mongo:7
     container_name: foodbridge-mongo
     restart: unless-stopped
-    ports:
-      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: foodbridge
     volumes:
       - foodbridge_mongo_data:/data/db
+    ports:
+      - "27018:27017"          # 27018 on the host avoids clashing with a local mongod on 27017
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ping:1}).ok"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 6
+    networks: [foodbridge]
 
   api:
     build:
@@ -22,12 +28,46 @@ services:
       mongo:
         condition: service_healthy
     environment:
+      NODE_ENV: production
       PORT: 5001
       MONGO_URI: mongodb://mongo:27017/foodbridge
-      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the shell or a .env file next to docker-compose.yml}
-      CLIENT_URL: ${CLIENT_URL:-http://localhost:5173}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (openssl rand -hex 32) before docker compose up}
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:8080,http://localhost:5173}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN2_EMAIL: ${ADMIN2_EMAIL:-}
+      ADMIN2_PASSWORD: ${ADMIN2_PASSWORD:-}
     ports:
       - "5001:5001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    networks: [foodbridge]
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:5001/api}
+    container_name: foodbridge-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [foodbridge]
 
 volumes:
   foodbridge_mongo_data:
+
+networks:
+  foodbridge:
+    driver: bridge
