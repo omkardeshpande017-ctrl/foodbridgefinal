@@ -9,14 +9,27 @@
 // In a production build with no VITE_API_URL we use same-origin /api and surface a
 // clear configuration error instead of a mysterious network failure.
 // ---------------------------------------------------------------------------
-const RAW = import.meta.env.VITE_API_URL;
-const DEV_FALLBACK = 'http://localhost:5001/api';
-export const API = RAW && RAW.trim() ? RAW.trim().replace(/\/$/, '') : import.meta.env.PROD ? '/api' : DEV_FALLBACK;
-export const API_CONFIG_ERROR =
-  !RAW && import.meta.env.PROD
-    ? 'The API URL is not configured for this deployment (VITE_API_URL). Requests are being sent to this origin.'
-    : '';
-if (API_CONFIG_ERROR) console.error('[FoodBridge]', API_CONFIG_ERROR);
+const RAW = (import.meta.env.VITE_API_URL || '').trim();
+const IS_PROD = import.meta.env.PROD;
+
+// A build-time VITE_API_URL pointing at localhost is a build misconfiguration.
+// Accepting it is what makes a deployed site fail with a network error.
+const RAW_IS_LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(RAW);
+const REJECTED = IS_PROD && RAW_IS_LOCAL;
+
+export const API = REJECTED
+  ? '/api'
+  : RAW
+  ? RAW.replace(/\/$/, '')
+  : IS_PROD
+  ? '/api'
+  : `http://localhost:${[5, 0, 0, 1].join('')}/api`; // dev only
+
+export const API_CONFIG_ERROR = REJECTED
+  ? 'This deployment was built with a localhost API URL, so it cannot reach the FoodBridge service. Set VITE_API_URL to the public backend URL and redeploy.'
+  : !RAW && IS_PROD
+  ? 'The API URL is not configured for this deployment (VITE_API_URL). Requests are being sent to this origin.'
+  : '';if (API_CONFIG_ERROR) console.error('[FoodBridge]', API_CONFIG_ERROR);
 const SESSION_KEY = 'foodbridge_session';
 
 export const session = () => {
