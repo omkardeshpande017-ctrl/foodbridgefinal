@@ -45,6 +45,9 @@ export const api = {
   // auth
   login: (body) => request('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   register: (body) => request('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
+  changePassword: (body) => request('/auth/change-password', { method: 'POST', body: JSON.stringify(body) }),
+  forgotPassword: (email) => request('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
+  resetPassword: (body) => request('/auth/reset-password', { method: 'POST', body: JSON.stringify(body) }),
   // donations
   donations: (params = {}) => request(`/donations${qs(params)}`),
   donation: (id) => request(`/donations/${id}`),

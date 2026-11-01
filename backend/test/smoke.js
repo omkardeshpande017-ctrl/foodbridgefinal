@@ -228,6 +228,34 @@ const register = async (name, role) => {
   });
   ok('past expiry rejected', expired.status === 400);
 
+  console.log('\nPassword management');
+  const changed = await call('POST', '/auth/change-password', {
+    token: donorToken,
+    body: { currentPassword: password, newPassword: 'ChangedPassword123!' }
+  });
+  ok('password change with correct current password', changed.status === 200);
+  const wrongCurrent = await call('POST', '/auth/change-password', {
+    token: donorToken,
+    body: { currentPassword: 'nope', newPassword: 'AnotherPassword123!' }
+  });
+  ok('password change rejects a wrong current password', wrongCurrent.status === 401);
+  const loginChanged = await call('POST', '/auth/login', { body: { email: donor.email, password: 'ChangedPassword123!' } });
+  ok('new password works', loginChanged.status === 200);
+  const forgot = await call('POST', '/auth/forgot-password', { body: { email: donor.email } });
+  ok('forgot-password responds generically', forgot.status === 200 && !!forgot.data?.message);
+  if (forgot.data?.devResetToken) {
+    const reset = await call('POST', '/auth/reset-password', {
+      body: { token: forgot.data.devResetToken, password: 'ResetPassword123!' }
+    });
+    ok('reset-password with the issued token', reset.status === 200);
+    const loginReset = await call('POST', '/auth/login', { body: { email: donor.email, password: 'ResetPassword123!' } });
+    ok('reset password works', loginReset.status === 200);
+  }
+  const unknownForgot = await call('POST', '/auth/forgot-password', { body: { email: `nobody.${stamp}@foodbridge.test` } });
+  ok('forgot-password does not leak account existence', unknownForgot.status === 200 && !unknownForgot.data?.devResetToken);
+  const setupNoToken = await call('POST', '/setup/admin', { body: { token: 'x', email: 'a@b.co', password: '123456789012' } });
+  ok('setup/admin is closed without SETUP_TOKEN', setupNoToken.status === 404 || setupNoToken.status === 403 || setupNoToken.status === 409);
+
   console.log('\nPlatform & security');
   const ready = await call('GET', '/ready');
   ok('readiness endpoint', ready.status === 200 && ready.data?.ready === true);

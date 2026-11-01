@@ -31,6 +31,29 @@ if (
   process.exit(1);
 }
 
+// Initial administrator provisioning. Runs only when a token is supplied, so a
+// fresh database can be bootstrapped once without a shell: POST /api/setup/admin
+// with { token, email, password } where token === SETUP_TOKEN. After the first
+// administrator exists the endpoint refuses every further call.
+async function provisionAdminIfRequested() {
+  const { SETUP_TOKEN, ADMIN_EMAIL, ADMIN_PASSWORD } = process.env;
+  if (!SETUP_TOKEN || !ADMIN_EMAIL || !ADMIN_PASSWORD) return;
+  const User = (await import('./models/User.js')).default;
+  const bcrypt = (await import('bcryptjs')).default;
+  const existing = await User.findOne({ role: 'admin' }).lean();
+  if (existing) return;
+  await User.create({
+    name: 'FoodBridge Administrator',
+    email: ADMIN_EMAIL.trim().toLowerCase(),
+    passwordHash: await bcrypt.hash(ADMIN_PASSWORD, 12),
+    role: 'admin',
+    status: 'active',
+    location: 'Pune',
+    verification: { status: 'not_required' }
+  });
+  console.log('Initial administrator provisioned from environment variables');
+}
+
 const app = express();
 app.disable('x-powered-by');
 
@@ -138,6 +161,37 @@ app.use('/api/deliveries', deliveries);
 app.use('/api/ai', ai);
 app.use('/api/reports', reports);
 
+// One-time administrator bootstrap (protected by SETUP_TOKEN).
+app.post('/api/setup/admin', async (req, res) => {
+  try {
+    const setupToken = process.env.SETUP_TOKEN;
+    if (!setupToken) return res.status(404).json({ message: 'Route not found' });
+    if (req.body?.token !== setupToken) return res.status(403).json({ message: 'Invalid setup token' });
+    const User = (await import('./models/User.js')).default;
+    const bcrypt = (await import('bcryptjs')).default;
+    if (await User.findOne({ role: 'admin' }).lean()) {
+      return res.status(409).json({ message: 'An administrator already exists' });
+    }
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+    if (!email.includes('@') || password.length < 12) {
+      return res.status(400).json({ message: 'A valid email and a 12+ character password are required' });
+    }
+    const admin = await User.create({
+      name: 'FoodBridge Administrator',
+      email,
+      passwordHash: await bcrypt.hash(password, 12),
+      role: 'admin',
+      status: 'active',
+      verification: { status: 'not_required' }
+    });
+    res.status(201).json({ created: true, email: admin.email });
+  } catch (e) {
+    console.error('setup admin', e);
+    res.status(500).json({ message: 'Could not create the administrator' });
+  }
+});
+
 app.use((req, res) => res.status(404).json({ message: 'Route not found' }));
 
 // eslint-disable-next-line no-unused-vars
@@ -152,6 +206,11 @@ if (!process.env.VERCEL) {
   if (!connected) {
     console.error('MongoDB is required. Set MONGO_URI and retry.');
     process.exit(1);
+  }
+  try {
+    await provisionAdminIfRequested();
+  } catch (e) {
+    console.error('admin provisioning failed', e.message);
   }
   const port = process.env.PORT || 5001;
   app.listen(port, () => console.log(`FoodBridge API running on http://localhost:${port}`));

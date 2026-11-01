@@ -5,7 +5,7 @@ const schema = new mongoose.Schema(
     name: { type: String, required: true, trim: true, maxlength: 120 },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
     phone: { type: String, trim: true, maxlength: 30 },
-    passwordHash: { type: String, required: true },
+    passwordHash: { type: String, required: true, select: false },
     role: { type: String, enum: ['donor', 'ngo', 'volunteer', 'admin'], required: true, index: true },
     location: { type: String, trim: true, maxlength: 160 },
     organization: { type: String, trim: true, maxlength: 160 },
@@ -21,7 +21,10 @@ const schema = new mongoose.Schema(
     // Volunteer availability toggles.
     available: { type: Boolean, default: true },
     status: { type: String, enum: ['active', 'suspended'], default: 'active', index: true },
-    lastLoginAt: Date
+    lastLoginAt: Date,
+    // SHA-256 of the emailed reset token; the raw token is never stored.
+    resetTokenHash: { type: String, index: true, select: false },
+    resetTokenExpires: { type: Date, select: false }
   },
   { timestamps: true }
 );

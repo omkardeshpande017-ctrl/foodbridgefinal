@@ -1,4 +1,4 @@
-import{useEffect,useState}from'react';import Layout from'../components/Layout';import PageHeader from'../components/PageHeader';import{api,session,saveSession}from'../services/api';import{CheckCircle2,AlertTriangle,BadgeCheck}from'lucide-react';
+import{useEffect,useState}from'react';import Layout from'../components/Layout';import PageHeader from'../components/PageHeader';import{api,session,saveSession}from'../services/api';import{CheckCircle2,AlertTriangle,BadgeCheck,KeyRound}from'lucide-react';
 
 export default function Profile(){
   const s=session();
@@ -6,6 +6,8 @@ export default function Profile(){
   const [verification,setVerification]=useState(s?.user?.verification||'not_required');
   const [role,setRole]=useState(s?.user?.role);
   const [msg,setMsg]=useState('');const [error,setError]=useState('');
+  const [pw,setPw]=useState({currentPassword:'',newPassword:''});
+  const [pwMsg,setPwMsg]=useState('');const [pwErr,setPwErr]=useState('');
 
   useEffect(()=>{api.me().then(u=>{setF(x=>({...x,name:u.name,phone:u.phone||'',location:u.location||'',organization:u.organization||'',registrationNumber:u.registrationNumber||'',available:u.available!==false}));setVerification(u.verification?.status||'not_required');setRole(u.role)}).catch(()=>{})},[]);
 
@@ -17,6 +19,12 @@ export default function Profile(){
       const cur=session();if(cur){saveSession({...cur,user:{...cur.user,name:u.name,location:u.location,organization:u.organization}})}
       setTimeout(()=>setMsg(''),2200);
     }catch(err){setError(err.message||'Could not save your profile.')}
+  }
+
+  async function changePassword(e){
+    e.preventDefault();setPwMsg('');setPwErr('');
+    try{await api.changePassword(pw);setPwMsg('Password updated.');setPw({currentPassword:'',newPassword:''})}
+    catch(err){setPwErr(err.message||'Could not update your password.')}
   }
 
   const verificationNote={
@@ -40,6 +48,15 @@ export default function Profile(){
       <label className="text-sm font-bold">Location<input className="input mt-1" value={f.location||''} onChange={e=>setF({...f,location:e.target.value})}/></label>
       {role==='volunteer'&&<label className="flex items-center gap-3 text-sm font-bold"><input type="checkbox" checked={!!f.available} onChange={e=>setF({...f,available:e.target.checked})}/>Available for pickup assignments</label>}
       <div><button className="btn btn-primary">Save profile</button></div>
+    </form>
+
+    <form onSubmit={changePassword} className="card p-6 max-w-2xl grid gap-4 mt-6">
+      <h2 className="font-black flex gap-2 items-center"><KeyRound size={18} className="text-green-600"/>Change password</h2>
+      {pwMsg&&<div className="bg-green-50 text-green-800 text-sm font-bold p-3 rounded-xl flex gap-2"><CheckCircle2 size={16}/>{pwMsg}</div>}
+      {pwErr&&<div className="bg-red-50 text-red-700 text-sm font-bold p-3 rounded-xl flex gap-2"><AlertTriangle size={16}/>{pwErr}</div>}
+      <label className="text-sm font-bold">Current password<input className="input mt-1" type="password" autoComplete="current-password" value={pw.currentPassword} onChange={e=>setPw({...pw,currentPassword:e.target.value})}/></label>
+      <label className="text-sm font-bold">New password (8+ characters)<input className="input mt-1" type="password" autoComplete="new-password" minLength="8" value={pw.newPassword} onChange={e=>setPw({...pw,newPassword:e.target.value})}/></label>
+      <div><button className="btn btn-secondary">Update password</button></div>
     </form>
   </Layout>
 }

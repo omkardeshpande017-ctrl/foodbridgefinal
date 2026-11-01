@@ -8,12 +8,16 @@ services:
     restart: unless-stopped
     environment:
       MONGO_INITDB_DATABASE: foodbridge
+      # Root credentials come from the .env file; auth is always enabled so the
+      # database can never be reached without a password.
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-foodbridge}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in .env}
     volumes:
       - foodbridge_mongo_data:/data/db
     ports:
       - "27018:27017"          # 27018 on the host avoids clashing with a local mongod on 27017
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ping:1}).ok"]
+      test: ["CMD", "mongosh", "--quiet", "-u", "${MONGO_ROOT_USERNAME:-foodbridge}", "-p", "${MONGO_ROOT_PASSWORD}", "--authenticationDatabase", "admin", "--eval", "db.runCommand({ping:1}).ok"]
       interval: 10s
       timeout: 5s
       retries: 6
@@ -30,7 +34,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 5001
-      MONGO_URI: mongodb://mongo:27017/foodbridge
+      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME:-foodbridge}:${MONGO_ROOT_PASSWORD}@mongo:27017/foodbridge?authSource=admin
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (openssl rand -hex 32) before docker compose up}
       CLIENT_URL: ${CLIENT_URL:-http://localhost:8080,http://localhost:5173}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
