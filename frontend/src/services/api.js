@@ -56,10 +56,21 @@ function networkError(cause) {
   return error;
 }
 
-function serverError(status) {
+// Static hosting answers a POST to an unknown path with 405 (and OPTIONS with
+// 405 too). That is never a "try again" condition: it means no API is reachable
+// at this address, so say so plainly instead of blaming the request.
+function serverError(status, method) {
+  if (status === 405) {
+    const error = new Error(
+      'No FoodBridge API is connected to this deployment. This site is only serving static files, so sign-in cannot work yet.'
+    );
+    error.status = status;
+    error.isMisconfigured = true;
+    return error;
+  }
   const error = new Error(
     status === 502 || status === 503 || status === 504
-      ? 'Service temporarily unavailable. Please try again in a moment.'
+      ? 'The FoodBridge service is temporarily unavailable. Please try again in a moment.'
       : `The server could not complete this request (${status}). Please try again.`
   );
   error.status = status;
@@ -95,7 +106,7 @@ async function request(path, options = {}) {
       error.status = response.status;
       throw error;
     }
-    throw serverError(response.status);
+    throw serverError(response.status, options.method || 'GET');
   }
   return data === null ? {} : data;
 }
