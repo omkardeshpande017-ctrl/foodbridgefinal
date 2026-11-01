@@ -23,6 +23,18 @@ Deployment targets: `vercel.json` serves the static build and mounts the same Ex
 serverless function at `/api/*`; `docker-compose.yml` runs mongo + api + web with healthchecks for
 self-hosting. The backend is a plain Node service and runs unchanged on any container host.
 
+## 1b. Latest increment — password management, secured Docker DB, docs
+
+| Change | Detail |
+|---|---|
+| Change password | `POST /api/auth/change-password` — authenticated, verifies the current password, bcrypt re-hash |
+| Forgot / reset password | `POST /api/auth/forgot-password` (SHA-256 hashed, single-use, 30-minute token; identical response for unknown emails) and `POST /api/auth/reset-password` |
+| Hash exposure | `passwordHash` is `select: false` and stripped from every response |
+| Admin bootstrap | `POST /api/setup/admin` gated by `SETUP_TOKEN`, `409` once an admin exists; optional first-boot provisioning from `ADMIN_EMAIL`/`ADMIN_PASSWORD` |
+| Docker MongoDB auth | root username/password from `.env`, `authSource=admin` in the API URI, authenticated healthcheck, host port still loopback-only |
+| Docs | `API.md` (every endpoint + transitions) and `OPERATIONS.md` (Docker, backup/restore, recovery, provisioning, GitHub→Vercel, monitoring) |
+| Tests | suite extended to **62 checks**, all passing |
+
 ## 2. Features implemented (this launch)
 
 | Area | Delivered |
@@ -44,18 +56,18 @@ self-hosting. The backend is a plain Node service and runs unchanged on any cont
 | Item | Value | Status |
 |---|---|---|
 | GitHub repository | https://github.com/omkardeshpande017-ctrl/foodbridgefinal | ✅ pushed |
-| Latest commit | `b08f9d7` — "Launch FoodBridge production-ready full-stack platform" | ✅ verified via API |
+| Latest commit | `9e4d82b` — "feat: password management, secured Docker MongoDB, API and ops docs" | ✅ pushed (launch commit `b08f9d7`) |
 | Frontend (local) | http://localhost:5173 | ✅ running, verified in browser |
 | API (local) | http://localhost:5001/api/health | ✅ `{"status":"ok","database":"connected"}` |
 | Frontend (production) | — | ❌ blocked: no Vercel account access |
 | API (production) | — | ❌ blocked: no host credentials |
 | MongoDB (production) | local `mongod` (9.0.2) for all tests | ❌ no Atlas cluster |
-| Vercel deployment | build succeeded (`Ready in 14s`), but every request returns `403 x-vercel-mitigated: deny` | ❌ anonymous temporary deployments are not publicly served |
+| Vercel deployment | rebuilt after the latest commit (`Ready in 15s`), but every request returns `403 x-vercel-mitigated: deny` | ❌ anonymous temporary deployments are not publicly served; needs account access |
 | Docker containers | `docker` is not installed on this machine | ⚠️ not executed; compose validated, Dockerfiles written |
 
 ## 4. Test results
 
-`ADMIN_EMAIL=… ADMIN_PASSWORD=… npm test` → **54 passed, 0 failed** (real MongoDB).
+`ADMIN_EMAIL=… ADMIN_PASSWORD=… npm test` → **62 passed, 0 failed** (real MongoDB).
 
 | Group | Checks | Result |
 |---|---|---|
@@ -70,6 +82,7 @@ self-hosting. The backend is a plain Node service and runs unchanged on any cont
 | Profile & users | 3 | ✅ |
 | Admin (users, reports, audit log, settings, dispute resolve, suspend → login blocked) | 8 | ✅ |
 | Security headers / pagination | 2 | ✅ |
+| Password management (change, wrong current 401, reset token, enumeration-safe) | 8 | ✅ |
 
 Browser verification (local, admin session): dashboard, Users (verification column + role filter),
 Disputes, Reports, Audit Log, Settings, Analytics, AI Insights, Profile, donation detail
