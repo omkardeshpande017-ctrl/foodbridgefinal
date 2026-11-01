@@ -44,3 +44,37 @@ export async function connectDB() {
 export function isDbConnected() {
   return mongoose.connection.readyState === 1;
 }
+
+// Retry with exponential backoff. A cold container, a database still starting or
+// a serverless cold start all benefit from a few attempts before giving up.
+export async function connectDBWithRetry({ attempts = 4, baseDelayMs = 400 } = {}) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    if (isDbConnected()) return true;
+    try {
+      const ok = await connectDB();
+      if (ok) return true;
+    } catch (e) {
+      lastError = e;
+    }
+    if (attempt < attempts) {
+      const delay = baseDelayMs * 2 ** (attempt - 1);
+      console.warn(`MongoDB attempt ${attempt}/${attempts} failed, retrying in ${delay}ms`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  if (lastError) console.error('MongoDB connection failed:', lastError.message);
+  return isDbConnected();
+}
+
+// Never echo credentials. Only the scheme, host list and database name.
+export function describeMongoUri(uri = process.env.MONGO_URI) {
+  if (!uri) return 'not set';
+  try {
+    const parsed = new URL(uri);
+    const hosts = (parsed.host || '').replace(/:[^@]*@/, '@');
+    return `${parsed.protocol}//${parsed.username ? '***@' : ''}${hosts}${parsed.pathname || ''}`;
+  } catch {
+    return 'set (unparseable)';
+  }
+}

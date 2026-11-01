@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import mongoose from 'mongoose';
-import { connectDB, isDbConnected } from './config/db.js';
+import { connectDB, connectDBWithRetry, describeMongoUri, isDbConnected } from './config/db.js';
 import { securityHeaders } from './middleware/security.js';
 import Setting from './models/Setting.js';
 
@@ -136,17 +136,31 @@ app.get('/api/version', (req, res) => {
 
 app.get('/api/health', async (req, res) => {
   // On a serverless host the connection is opened on demand, so probe it here.
-  if (process.env.VERCEL && mongoose.connection.readyState !== 1) {
+  if (process.env.VERCEL && !isDbConnected()) {
     try {
-      await connectDB();
+      await connectDBWithRetry({ attempts: 3, baseDelayMs: 300 });
     } catch (e) {
       console.error('DB connection failed', e.message);
     }
   }
-  res.json({
-    status: 'ok',
+  // A ping is the only proof the database is really usable; readyState alone can
+  // be stale on a serverless host that reused a socket pool.
+  let database = 'disconnected';
+  if (isDbConnected()) {
+    try {
+      await mongoose.connection.db.admin().command({ ping: 1 });
+      database = 'connected';
+    } catch (e) {
+      database = 'disconnected';
+      console.error('MongoDB ping failed', e.message);
+    }
+  }
+  res.status(database === 'connected' ? 200 : 503).json({
+    status: database === 'connected' ? 'ok' : 'degraded',
     service: 'FoodBridge API',
-    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    database,
+    // Never the credentials — scheme, host and database name only.
+    mongoTarget: describeMongoUri(),
     timestamp: new Date().toISOString()
   });
 });
@@ -163,7 +177,7 @@ if (process.env.VERCEL) {
     const isDataRoute = req.path !== '/health' && req.path !== '/ready' && req.path !== '/version';
     if (isDataRoute && !isDbConnected()) {
       try {
-        await connectDB();
+        await connectDBWithRetry({ attempts: 2, baseDelayMs: 300 });
       } catch (e) {
         console.error('DB connection failed', e.message);
       }
@@ -229,7 +243,8 @@ app.use((err, req, res, next) => {
 });
 
 if (!process.env.VERCEL) {
-  const connected = await connectDB();
+  console.log('Connecting to MongoDB at', describeMongoUri());
+  const connected = await connectDBWithRetry({ attempts: 5, baseDelayMs: 500 });
   if (!connected) {
     console.error('MongoDB is required. Set MONGO_URI and retry.');
     process.exit(1);
