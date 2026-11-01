@@ -65,9 +65,37 @@ self-hosting. The backend is a plain Node service and runs unchanged on any cont
 | Vercel deployment | rebuilt after the latest commit (`Ready in 15s`), but every request returns `403 x-vercel-mitigated: deny` | ❌ anonymous temporary deployments are not publicly served; needs account access |
 | Docker containers | `docker` is not installed on this machine | ⚠️ not executed; compose validated, Dockerfiles written |
 
+## 3b. Credential rotation (performed)
+
+The administrator password shown in an earlier local-testing report is treated as
+compromised: it was rotated with `npm run seed`, the old password now returns `401`,
+and no administrator password appears in this report, the README, the source or any
+committed file (`git log -S` finds none). Local test helper scripts that contained it
+were deleted. Rotate again before any public deployment.
+
 ## 4. Test results
 
 `ADMIN_EMAIL=… ADMIN_PASSWORD=… npm test` → **62 passed, 0 failed** (real MongoDB).
+
+| Suite | Command | Result |
+|---|---|---|---|
+| API behaviour | `npm test` | **62 / 62 passed** |
+| Edge cases & permissions | `npm run test:edge` | **32 / 32 passed** |
+| Full user journey (donor → NGO → volunteer → donor → admin) | `npm run test:journey` | **22 / 22 passed** |
+| **Total** | `npm run test:all` | **116 / 116 passed** |
+
+Browser (UI) verification, all four roles, no console errors observed:
+
+| Flow | Result |
+|---|---|
+| Donor posts a donation → redirected to detail page, timeline shows *Available* | ✅ |
+| Search in My Donations filters correctly | ✅ |
+| Admin verifies the NGO (Pending → Verified) | ✅ |
+| NGO finds the donation, accepts it, assigns a volunteer | ✅ |
+| Volunteer advances *picked up → in transit → delivered* from /tasks | ✅ |
+| Donor sees *Delivered* with the full 5-entry history and actors | ✅ |
+| Donor opening /users is redirected to /dashboard (role guard) | ✅ |
+| Analytics, AI, Map, Notifications, Profile, Dashboard render with live data | ✅ |
 
 | Group | Checks | Result |
 |---|---|---|
