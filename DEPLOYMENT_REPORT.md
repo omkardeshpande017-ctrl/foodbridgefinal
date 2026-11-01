@@ -1,3 +1,45 @@
+# FoodBridge — deployment report (latest)
+
+Updated 2026-11-01, commit `ff99316`.
+
+## Status board
+
+| Item | Status | Detail |
+|---|---|---|
+| Public frontend (Cloudflare Workers) | PASSED | https://foodbridge.defiant-technician-1cf.workers.dev — 200, SPA deep links work, Worker version `57111601` |
+| Public **Vercel** frontend | **BLOCKED** | Vercel CLI: "Logged out. Run `vercel login`". Anonymous/temporary deploys are refused. No token or session exists on this machine. |
+| Production backend API | **BLOCKED** | No Render/Railway/Fly/Cloudflare account credentials. `POST /api/auth/login` on the Worker host returns 405 because it is a static-assets host. |
+| Production MongoDB | **BLOCKED** | No Atlas (or equivalent) connection string. |
+| Local Docker MongoDB | **NOT TESTED** | `docker` is not installed on this machine (`brew install --cask docker` requires the user's admin password). Compose file and Dockerfiles are written and validated. |
+| Local stack (Express + MongoDB + Vite) | PASSED | API `/health` reports `database: connected`; frontend on :5173 |
+| GitHub | PASSED | https://github.com/omkardeshpande017-ctrl/foodbridgefinal |
+| Automatic GitHub → Vercel deploy | **BLOCKED** | Requires the Vercel project to exist in the user's account |
+
+## Why login cannot work on the public URL yet (the 405)
+
+```
+POST https://foodbridge.defiant-technician-1cf.workers.dev/api/auth/login -> 405, empty body
+GET  https://foodbridge.defiant-technician-1cf.workers.dev/api/auth/login -> 200 (index.html)
+```
+
+The deployment serves static assets only. There is no API route behind `/api/*`, so the
+static layer rejects POST. The client now says so explicitly instead of asking the user to
+retry. Resolving it requires deploying the Express API somewhere public and setting
+`VITE_API_URL` — see "What unblocks it" below.
+
+## What unblocks it (two credentials)
+
+1. `npx vercel login` in `~/Downloads/foodbridge-final`, or a Vercel token
+   (vercel.com → Account Settings → Tokens). This also enables automatic deployments.
+2. A MongoDB Atlas `mongodb+srv://…` URI, plus a token for Render or Railway to host the API
+   (or a Cloudflare account token if the API should run on Workers with a Durable Object).
+
+Then: deploy the API with `MONGO_URI`, `JWT_SECRET`, `CLIENT_URL`; run
+`POST /api/setup/admin` once; build the frontend with `VITE_API_URL=https://<api-host>/api`;
+`vercel --prod`; run `node backend/test/journey.js https://<api-host>/api` to certify.
+
+---
+
 # FoodBridge — Launch Report
 
 Generated 2026-11-01 (Asia/Calcutta) · Project: `~/Downloads/foodbridge-final` · Repository:
