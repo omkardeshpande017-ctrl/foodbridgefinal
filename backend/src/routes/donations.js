@@ -164,7 +164,7 @@ r.patch('/:id', auth, async (req, res) => {
     const d = await Donation.findById(req.params.id);
     if (!d) return res.status(404).json({ message: 'Donation not found' });
     const isOwner = String(d.donorId) === String(req.user.id);
-    if (req.user.role !== 'admin' && !(isOwner && req.user.role === 'donor')) {
+    if (req.user.role !== 'admin' && !isOwner) {
       return res.status(403).json({ message: 'You cannot edit this donation' });
     }
     if (!['available'].includes(d.status)) return res.status(409).json({ message: 'Only available donations can be edited' });
@@ -326,7 +326,7 @@ r.delete('/:id', auth, async (req, res) => {
     const d = await Donation.findById(req.params.id);
     if (!d) return res.status(404).json({ message: 'Donation not found' });
     const isOwner = String(d.donorId) === String(req.user.id);
-    if (req.user.role !== 'admin' && !(isOwner && req.user.role === 'donor')) {
+    if (req.user.role !== 'admin' && !isOwner) {
       return res.status(403).json({ message: 'You cannot delete this donation' });
     }
     if (!['cancelled', 'expired'].includes(d.status) && req.user.role !== 'admin') {

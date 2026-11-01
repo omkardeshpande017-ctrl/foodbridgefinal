@@ -2,7 +2,7 @@
   "name": "foodbridge",
   "private": true,
   "version": "2.2.0",
-  "description": "FoodBridge — food donation, pickup and delivery platform (React + Vite + Express + MongoDB)",
+  "description": "FoodBridge \u2014 food donation, pickup and delivery platform (React + Vite + Express + MongoDB)",
   "engines": {
     "node": "22.x"
   },
@@ -15,7 +15,10 @@
     "build": "npm --prefix frontend run build",
     "start": "npm --prefix backend start",
     "test": "node backend/test/smoke.js",
-    "check": "node --check backend/src/server.js && node --check backend/src/routes/auth.js && node --check backend/src/seed.js"
+    "check": "node --check backend/src/server.js && node --check backend/src/routes/auth.js && node --check backend/src/seed.js",
+    "test:journey": "node backend/test/journey.js",
+    "test:edge": "node backend/test/edge.js",
+    "test:all": "npm test && npm run test:edge && npm run test:journey"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
