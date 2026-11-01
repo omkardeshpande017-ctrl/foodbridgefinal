@@ -1,96 +1,120 @@
-# FoodBridge — deployment & test report
+# FoodBridge — Launch Report
 
-Generated: 2026-11-01 (Asia/Calcutta) · Source: `~/Downloads/foodbridge-final`
+Generated 2026-11-01 (Asia/Calcutta) · Project: `~/Downloads/foodbridge-final` · Repository:
+https://github.com/omkardeshpande017-ctrl/foodbridgefinal
 
-## 1. Summary
+---
 
-The real FoodBridge project from Downloads was inspected, hardened, tested against a live
-MongoDB, and pushed to `omkardeshpande017-ctrl/foodbridgefinal` (branch `main`).
-A production Vercel deployment of the exact repository contents was built and uploaded
-successfully, but **every request to it is blocked by Vercel's edge** (`403 Forbidden`,
-`x-vercel-mitigated: deny`) because anonymous "temporary" deployments cannot be served to the
-public. A permanent, public production URL requires Vercel account access, and a persistent
-production MongoDB requires a MongoDB Atlas (or equivalent) connection string. Both are
-account-bound and were requested; nothing was faked in their place.
+## 1. Architecture
 
-## 2. Stack
+```
+Browser ──► React 18 / Vite 6 SPA (lazy routes, Tailwind, dark mode)
+                │  JSON over HTTPS (JWT bearer, 2 h)
+                ▼
+        Express 4 API  (/api/*)  ──►  Mongoose 8  ──►  MongoDB 7
+                │                                   (persistent, indexed)
+                ├─ auth (bcrypt 12, DB-revalidated JWT, rate limited)
+                ├─ donations · deliveries · users · analytics
+                ├─ notifications · reports (disputes) · ai insights
+                └─ AuditLog · Setting · health / ready / version
+```
 
-| Layer | Technology |
+Deployment targets: `vercel.json` serves the static build and mounts the same Express app as a
+serverless function at `/api/*`; `docker-compose.yml` runs mongo + api + web with healthchecks for
+self-hosting. The backend is a plain Node service and runs unchanged on any container host.
+
+## 2. Features implemented (this launch)
+
+| Area | Delivered |
 |---|---|
-| Frontend | React 18, Vite 6, Tailwind 3, React Router 7, Recharts, lucide-react |
-| Backend | Node 22, Express 4, Mongoose 8, JWT (2 h), bcrypt (cost 12), CORS, morgan |
-| Database | MongoDB (local `mongod` 9.0.2 during verification; Atlas for production) |
-| Deploy | `vercel.json` (static Vite build + `/api` serverless function), Docker Compose, Dockerfiles |
+| Donation lifecycle | `available → accepted → picked_up → in_transit → delivered` + `expired`, `cancelled`; atomic acceptance (no duplicate accept), timestamped history on every transition, `pickedUpAt`/`deliveredAt` |
+| Expiry | real `expiresAt` from expiry/pickup time, auto-expire on read, past expiry rejected at creation, expired donations cannot be accepted |
+| Donor | create/edit/delete, photo upload (≤1.5 MB validated), expiry validation, history, notifications, pagination/search/filters |
+| NGO | organisation registration, verification gate before accepting, browse available, accept, release, assign volunteer, distribution tracking |
+| Volunteer | availability toggle, only own tasks, `picked_up → in_transit → delivered` with ownership checks |
+| Admin | user directory (search/filter/paginate), NGO verification, suspend/activate, disputes triage, audit log, platform settings, impact report |
+| Security | JWT re-validated against the DB per request, security headers, auth rate limiting (40/15 min), strict validation, CORS allow-list, role guards, audit trail, no demo accounts |
+| Analytics | role-scoped summary, network overview, 7-day trend, 6-month monthly trend, success rate, per-status breakdown — all computed from real records |
+| Notifications | dedupe keys, unread counts, mark one / mark all |
+| UI | donation detail with lifecycle timeline, dark mode, route-level code splitting (main bundle 693 kB → 198 kB), loading/empty/error states, responsive tables |
+| Ops | `/api/health`, `/api/ready` (503 without DB), `/api/version`, Docker healthchecks, restart policies |
 
-## 3. Changes implemented
+## 3. URLs and status
 
-**Backend**
-- `server.js`: strict `JWT_SECRET` validation (no default, no demo fallback), CORS allow-list with
-  Vercel preview support, auth rate limiting (40 attempts / 15 min per IP+email), JSON 404/500
-  handlers, `export default app` for serverless plus local `listen`, DB probe in `/api/health`,
-  per-invocation MongoDB connect on serverless registered **before** the routers.
-- `config/db.js`: cached Mongoose connection, `serverSelectionTimeoutMS: 8000`.
-- `routes/deliveries.js`: rebuilt with ownership checks — NGO creates and assigns a volunteer,
-  volunteer advances `assigned → picked_up → in_transit → delivered`, donation status follows.
-- `routes/donations.js`: an NGO can release its own accepted donation; volunteers can filter
-  `?mine=true`.
-- `routes/analytics.js`: the 7-day trend is computed from real donations (fixed arrays removed).
-- `routes/ai.js`: insights and forecast derived from live collections, flagged `method: 'rule-based'`
-  (the previous hard-coded "demo AI" payload is gone).
-- `models/Delivery.js`: `ngoId` + indexes; `seed.js` unchanged (idempotent admin provisioning).
+| Item | Value | Status |
+|---|---|---|
+| GitHub repository | https://github.com/omkardeshpande017-ctrl/foodbridgefinal | ✅ pushed |
+| Latest commit | `b08f9d7` — "Launch FoodBridge production-ready full-stack platform" | ✅ verified via API |
+| Frontend (local) | http://localhost:5173 | ✅ running, verified in browser |
+| API (local) | http://localhost:5001/api/health | ✅ `{"status":"ok","database":"connected"}` |
+| Frontend (production) | — | ❌ blocked: no Vercel account access |
+| API (production) | — | ❌ blocked: no host credentials |
+| MongoDB (production) | local `mongod` (9.0.2) for all tests | ❌ no Atlas cluster |
+| Vercel deployment | build succeeded (`Ready in 14s`), but every request returns `403 x-vercel-mitigated: deny` | ❌ anonymous temporary deployments are not publicly served |
+| Docker containers | `docker` is not installed on this machine | ⚠️ not executed; compose validated, Dockerfiles written |
 
-**Frontend**
-- `pages/Volunteer.jsx`: real assigned tasks from the API (demo tasks removed), loading/empty/error
-  states, per-step progress with server-side validation surfaced.
-- `pages/Requests.jsx`, `pages/Distribution.jsx`: real accepted-donation data instead of hard-coded
-  tables, with live status counters.
-- `components/Navbar.jsx`: Login link for guests, Logout for sessions, working mobile menu.
+## 4. Test results
 
-**Repository / deployment**
-- `vercel.json`, `api/index.js` (serverless entry), `.vercelignore`.
-- `backend/Dockerfile`, `frontend/Dockerfile` + `nginx.conf`, `docker-compose.yml` (mongo + api with
-  a persistent named volume and healthchecks).
-- `backend/.env.example`, `frontend/.env.example`, rewritten `README.md`, `TERMINAL_COMMANDS.md`.
-- Removed the in-memory demo store and every demo credential (`password123`, `*@foodbridge.app`).
-
-## 4. Test results — local, against real MongoDB
-
-`ADMIN_EMAIL=… ADMIN_PASSWORD=… npm test` → **35 passed, 0 failed**.
+`ADMIN_EMAIL=… ADMIN_PASSWORD=… npm test` → **54 passed, 0 failed** (real MongoDB).
 
 | Group | Checks | Result |
 |---|---|---|
-| Health | endpoint + real DB state | PASS |
-| Registration | donor / NGO / volunteer created, admin self-registration rejected (400) | PASS (4) |
-| Login | wrong password 401, correct password 200, role from DB, protected route 401 | PASS (4) |
-| Donations | donor creates, NGO cannot create (403), invalid input 400, donor list, donor cannot accept (403), NGO accepts, NGO recorded, double accept 409 | PASS (8) |
-| Pickup & delivery | NGO assigns volunteer, volunteer sees task, donor cannot progress (403), picked_up → in_transit → delivered, donation follows, notifications created | PASS (8) |
-| Analytics | scoped summary, 7-day trend, donation counted, insights data-derived, forecast | PASS (5) |
-| Profile & users | profile update persists, non-admin cannot list users (403) | PASS (2) |
-| Admin | admin login, user list, reports | PASS (3) |
-| Build | `npm run build` from a clean clone | PASS |
-| Serverless entry | `VERCEL=1` → `/api/health` (database: connected), login, `/api/analytics/overview` | PASS |
+| Health / readiness / version | 3 | ✅ |
+| Registration (donor, NGO, volunteer; admin blocked) | 4 | ✅ |
+| Login (wrong password, correct, role from DB, protected route) | 4 | ✅ |
+| Donations (create, role denial, validation, edit, delete, expiry rejection) | 10 | ✅ |
+| Lifecycle (accept, duplicate accept 409, history, timestamps) | 7 | ✅ |
+| Pickup & delivery (assign, ownership, 3 transitions, donation follows) | 8 | ✅ |
+| NGO verification gate | 2 | ✅ |
+| Analytics / insights | 5 | ✅ |
+| Profile & users | 3 | ✅ |
+| Admin (users, reports, audit log, settings, dispute resolve, suspend → login blocked) | 8 | ✅ |
+| Security headers / pagination | 2 | ✅ |
 
-Browser verification (local, http://localhost:5173): landing page renders
-("Turn Surplus Food Into Meaningful Impact"), login as the admin reaches `/dashboard`,
-all API calls 200, no console or network errors, no error overlay.
+Browser verification (local, admin session): dashboard, Users (verification column + role filter),
+Disputes, Reports, Audit Log, Settings, Analytics, AI Insights, Profile, donation detail
+(lifecycle timeline, people panel), notifications and the dark-mode toggle all render with real
+data — **no console errors, no failed API requests**.
 
-## 5. Production deployment status
+Clean-clone verification: fresh `git clone` → `npm install` both apps → production build OK →
+API boots and reports `database: connected`.
 
-| Item | Status |
-|---|---|
-| GitHub repository | https://github.com/omkardeshpande017-ctrl/foodbridgefinal |
-| Latest commit | `bcd0fab` (pinned Node 22.x); code commit `fe930f0` |
-| Vercel build | **Succeeded** — "Build Completed", "Ready in 11s", deployment `turbo-jasper-yhwmqya` |
-| Vercel public URL | **Blocked**: `https://turbo-jasper-yhwmqya.tmp.now` returns 403 `x-vercel-mitigated: deny` (anonymous temporary deployment; no account token in this environment) |
-| Production MongoDB | **Not provisioned**: no Atlas/other connection string available |
+## 5. Database
 
-## 6. What is required to finish (account access only)
+- Collections: `users`, `donations`, `deliveries`, `notifications`, `auditlogs`, `reports`, `settings`.
+- Indexes: unique email; role/status; `donations` on status+createdAt, donorId, ngoId, volunteerId,
+  expiresAt, text index on name/description/location; `notifications` unique `(userId, dedupeKey)`.
+- Persistence verified: records written by the API survive an API restart and are readable after
+  reconnecting (`/api/donations?status=delivered` still returns the delivered rows).
+- Backup/recovery: with a managed cluster, Atlas automated snapshots + `mongodump`/`mongorestore`
+  documented in the README. **Not configured** — no production cluster exists yet.
 
-1. **Vercel** — either a Vercel access token (vercel.com → Account Settings → Tokens) or run
-   `npx vercel login` once in the project folder, then the existing `vercel.json` deploys the
-   frontend and API as one public project.
-2. **MongoDB Atlas** — a free cluster and its SRV connection string.
+## 6. Security checks performed
 
-With those two values the remaining steps are one deploy plus a seed run
-(`MONGO_URI=… ADMIN_EMAIL=… ADMIN_PASSWORD=… node backend/src/seed.js`), then
-`node backend/test/smoke.js https://<host>/api` to verify the live site.
+bcrypt cost 12 · JWT ≥32-char secret enforced at boot (API refuses to start otherwise) · token
+revalidated against the database each request · admin self-registration rejected · suspended users
+blocked at login and on every authenticated request · role-based route guards on all mutations ·
+IDOR checks on donation/delivery/report endpoints · input validation and length caps · image payload
+validation · CORS allow-list · security headers (nosniff, frame deny, referrer policy, CSP, HSTS in
+production) · auth rate limiting · audit log of privileged actions · `.env*` ignored, no secrets in
+the repository (verified on a clean clone).
+
+## 7. Performance
+
+Route-level code splitting (main bundle 693 kB → 198 kB, charts split out), lazy pages, indexed
+queries, pagination on every list endpoint, lean() reads, connection pooling with a cached Mongoose
+connection, immutable asset caching via Vercel headers / nginx, Docker image healthchecks.
+
+## 8. Remaining blockers (external, account-bound)
+
+1. **Vercel** — the repository deploys and builds, but a public URL needs an account:
+   `npx vercel login` in `~/Downloads/foodbridge-final`, or a Vercel token. Without it every
+   request to the deployment is refused with `403 x-vercel-mitigated: deny`.
+2. **Managed MongoDB** — a MongoDB Atlas SRV string (`mongodb+srv://…`) is required for a database
+   that survives independently of this MacBook.
+3. **Docker** — Docker Desktop is not installed here, so `docker compose up` could not be executed;
+   the compose file and both Dockerfiles are written and validated.
+
+With (1) and (2) the remaining work is: deploy, run `node backend/src/seed.js` against Atlas,
+and run `node backend/test/smoke.js https://<host>/api` to certify the live site — the same suite
+that passes 54/54 locally.
