@@ -58,6 +58,13 @@ const app = express();
 app.disable('x-powered-by');
 
 // CLIENT_URL may be a comma separated list of allowed origins.
+// Local development origins (any port, localhost or loopback) are always allowed
+// when the API is not running in production, so dev servers on other ports or
+// hosts do not break the frontend.
+const isLocalDevOrigin = (origin) =>
+  process.env.NODE_ENV !== 'production' &&
+  /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
+
 const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
   .split(',')
   .map((o) => o.trim())
@@ -67,7 +74,12 @@ app.use(
   cors({
     origin: (origin, cb) => {
       // No Origin header = curl, server-to-server or same-origin request.
-      if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      if (
+        !origin ||
+        allowedOrigins.includes('*') ||
+        allowedOrigins.includes(origin) ||
+        isLocalDevOrigin(origin)
+      ) {
         return cb(null, true);
       }
       // Never break a Vercel preview deployment of this project.
