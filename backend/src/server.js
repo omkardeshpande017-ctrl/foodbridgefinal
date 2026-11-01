@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import mongoose from 'mongoose';
-import { connectDB } from './config/db.js';
+import { connectDB, isDbConnected } from './config/db.js';
 import { securityHeaders } from './middleware/security.js';
 import Setting from './models/Setting.js';
 
@@ -154,14 +154,28 @@ app.get('/api/health', async (req, res) => {
 // In a serverless environment the MongoDB connection is established per
 // invocation (and cached across warm ones) before any route runs. Locally the
 // connection is opened once at boot, so this is a no-op there.
+//
+// If the database is unreachable, data routes answer 503 immediately with the
+// reason. Without this a query would sit in Mongoose's command buffer until the
+// platform's function timeout, and the client would only see a generic error.
 if (process.env.VERCEL) {
   app.use(async (req, res, next) => {
-    try {
-      await connectDB();
-    } catch (e) {
-      console.error('DB connection failed', e.message);
+    const isDataRoute = req.path !== '/health' && req.path !== '/ready' && req.path !== '/version';
+    if (isDataRoute && !isDbConnected()) {
+      try {
+        await connectDB();
+      } catch (e) {
+        console.error('DB connection failed', e.message);
+      }
     }
-    next();
+    if (isDataRoute && !isDbConnected()) {
+      return res.status(503).json({
+        message:
+          'The FoodBridge database is not reachable. Check MONGO_URI and the database network access rules.',
+        database: 'disconnected'
+      });
+    }
+    return next();
   });
 }
 
