@@ -1,0 +1,33 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: foodbridge-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - foodbridge_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ping:1}).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+    container_name: foodbridge-api
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      PORT: 5001
+      MONGO_URI: mongodb://mongo:27017/foodbridge
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the shell or a .env file next to docker-compose.yml}
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:5173}
+    ports:
+      - "5001:5001"
+
+volumes:
+  foodbridge_mongo_data:
