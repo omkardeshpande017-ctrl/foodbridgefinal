@@ -38,6 +38,14 @@ MongoDB persistence, JWT authentication with role-based authorisation — not a 
 - **Cross-cutting** — JWT auth with 2h expiry, role-based route guards, in-app notifications,
   data-derived analytics and a 7-day projection, rate limiting on auth, CORS allow-list.
 
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [`API.md`](API.md) | Every endpoint, payload, status transition and error code |
+| [`OPERATIONS.md`](OPERATIONS.md) | Docker stack, backup/restore, recovery, admin provisioning, GitHub→Vercel deployment, monitoring |
+| [`DEPLOYMENT_REPORT.md`](DEPLOYMENT_REPORT.md) | Latest verified test results, deployment status and open blockers |
+
 ## Project layout
 
 ```
@@ -65,7 +73,21 @@ foodbridge-final/
 
 ## Local development
 
-Requirements: Node.js 20+, npm, and MongoDB 7 (Docker Desktop or a local `mongod`).
+Requirements: Node.js 20+, npm, and MongoDB 7 — **Docker MongoDB is the default** (`docker compose`
+runs mongo + api + web with authentication, a persistent volume and healthchecks); a local `mongod`
+works too when Docker is unavailable.
+
+### Docker MongoDB (default)
+
+```bash
+cp .env.example .env                     # JWT_SECRET, MONGO_ROOT_PASSWORD, ADMIN_*
+JWT_SECRET=$(openssl rand -hex 32) docker compose up -d --build
+docker compose exec api node src/seed.js
+```
+
+- Web: http://localhost:8080 · API: http://localhost:5001/api · Mongo: `127.0.0.1:27018` (loopback only, password required)
+
+### Without Docker
 
 ```bash
 # 1. dependencies
