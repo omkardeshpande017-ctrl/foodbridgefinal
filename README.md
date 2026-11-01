@@ -97,7 +97,7 @@ npm run install-all
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
 # edit backend/.env: JWT_SECRET (openssl rand -hex 32), ADMIN_EMAIL, ADMIN_PASSWORD,
-# ADMIN2_EMAIL, ADMIN2_PASSWORD (12+ chars each). Keep SEED_SAMPLE_* false.
+# ADMIN2_EMAIL, ADMIN2_PASSWORD (12+ chars each).
 
 # 3. database (Docker)
 docker compose up -d mongo

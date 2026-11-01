@@ -10,10 +10,25 @@ export default function Auth({register=false}){
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
 
-  const change=e=>setForm(old=>({...old,[e.target.name]:e.target.value}));
+  const change=e=>{if(error)setError('');if(notice)setNotice('');setForm(old=>({...old,[e.target.name]:e.target.value}))};
+
+  // Client-side checks mirror the API rules so users get field-level feedback
+  // before a round trip; the API still validates everything server-side.
+  function validate(){
+    const email=(form.email||'').trim();
+    if((mode==='login'||mode==='register'||mode==='forgot')&&!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email))return 'Enter a valid email address.';
+    if((mode==='register'||mode==='reset')&&(form.password||'').length<8)return 'Password must be at least 8 characters.';
+    if(mode==='register'&&!form.name.trim())return 'Your name is required.';
+    if(mode==='register'&&form.role==='ngo'&&!form.organization.trim())return 'An organisation name is required to register as an NGO.';
+    if(mode==='register'&&form.phone&&!/^[0-9+\-()\s]{7,20}$/.test(form.phone))return 'Enter a valid phone number.';
+    return '';
+  }
 
   async function submit(e){
-    e.preventDefault();setError('');setNotice('');setLoading(true);
+    e.preventDefault();setError('');setNotice('');
+    const problem=validate();
+    if(problem){setError(problem);return}
+    setLoading(true);
     try{
       if(mode==='login'||mode==='register'){
         const data=mode==='register'?await api.register(form):await api.login({email:form.email,password:form.password});

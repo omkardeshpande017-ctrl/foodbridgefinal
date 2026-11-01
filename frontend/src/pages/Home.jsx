@@ -1,4 +1,4 @@
-import{Link}from'react-router-dom';import{useEffect,useState}from'react';import{ArrowRight,BarChart3,BrainCircuit,HeartHandshake,Leaf,Route,ShieldCheck,Truck,Users,Utensils,Globe2,Loader2}from'lucide-react';import{TrendChart}from'../components/Charts';import{api}from'../services/api';
+import{Link}from'react-router-dom';import{useEffect,useState}from'react';import{ArrowRight,BarChart3,BrainCircuit,HeartHandshake,Leaf,Route,ShieldCheck,Truck,Users,Utensils,Globe2,Loader2}from'lucide-react';import{TrendChart}from'../components/Charts';import{API}from'../services/api';
 
 const formatters=[
   ['Food Donated',(o)=>`${Math.round(o.totalFood||0).toLocaleString()} kg`],
@@ -15,7 +15,7 @@ export default function Home(){
   useEffect(()=>{
     // Public network figures. Requires an anonymous-readable endpoint; when the
     // API is unreachable the page shows an honest placeholder instead of numbers.
-    fetch(`${(import.meta.env.VITE_API_URL||'http://localhost:5001/api')}/analytics/public`)
+    fetch(`${API}/analytics/public`)
       .then(r=>r.ok?r.json():Promise.reject(new Error('unavailable')))
       .then(setO)
       .catch(()=>setO(false));

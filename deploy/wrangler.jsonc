@@ -1,8 +1,14 @@
 {
-  // Cloudflare Workers static deployment of the FoodBridge frontend.
-  // The API is a separate Node/Express service (see OPERATIONS.md); point
-  // VITE_API_URL at it before building, then:
+  // Cloudflare Workers deployment of the FoodBridge frontend (static assets).
+  //
+  // The API is a separate Node/Express service. Set VITE_API_URL at build time so
+  // the deployed bundle points at it:
+  //   VITE_API_URL=https://<api-host>/api npm run build --prefix frontend
   //   npx wrangler deploy --config deploy/wrangler.jsonc
+  //
+  // Without VITE_API_URL the build falls back to same-origin /api (see
+  // frontend/src/services/api.js) and the app reports a configuration error
+  // instead of a raw "Failed to fetch".
   "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "foodbridge",
   "compatibility_date": "2026-10-13",
