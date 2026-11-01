@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import express from 'express';
-import cors from 'cors';
 import morgan from 'morgan';
 import mongoose from 'mongoose';
 import { connectDB, connectDBWithRetry, describeMongoUri, isDbConnected } from './config/db.js';
@@ -71,25 +70,55 @@ const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
   .map((o) => o.trim())
   .filter(Boolean);
 
-app.use(
-  cors({
-    origin: (origin, cb) => {
-      // No Origin header = curl, server-to-server or same-origin request.
-      if (
-        !origin ||
-        allowedOrigins.includes('*') ||
-        allowedOrigins.includes(origin) ||
-        isLoopbackOrigin(origin)
-      ) {
-        return cb(null, true);
-      }
-      // Never break a Vercel preview deployment of this project.
-      if (/^https:\/\/[a-z0-9-]+(\.vercel\.app)$/i.test(origin)) return cb(null, true);
-      return cb(new Error(`CORS: ${origin} is not allowed`));
-    },
-    credentials: true
-  })
-);
+// A request is same-origin when the browser's Origin matches the host the request
+// was actually sent to. In that case CORS does not apply at all, and refusing it
+// is a bug: the Docker web container serves the SPA and proxies /api on the same
+// host, and a tunnel (Cloudflare quick tunnel, ngrok, a LAN IP) changes that host
+// every time it starts, so a static allow-list can never keep up.
+const requestHosts = (req) => {
+  const forwardedHost = String(req.headers['x-forwarded-host'] || '').split(',')[0].trim();
+  return [req.headers.host, forwardedHost]
+    .filter(Boolean)
+    .map((h) => String(h).toLowerCase());
+};
+
+const isSameOrigin = (req, origin) => {
+  if (!origin) return false;
+  try {
+    return requestHosts(req).includes(new URL(origin).host.toLowerCase());
+  } catch {
+    return false;
+  }
+};
+
+// Allowed when the request has no Origin, when the Origin is explicitly listed in
+// CLIENT_URL, when it is a loopback or Vercel preview origin, or when its host is
+// exactly the host the request arrived on (same-origin — CORS does not apply).
+const isAllowedOrigin = (req, origin) =>
+  !origin ||
+  allowedOrigins.includes('*') ||
+  allowedOrigins.includes(origin) ||
+  isLoopbackOrigin(origin) ||
+  /^https:\/\/[a-z0-9-]+(\.vercel\.app)$/i.test(origin) ||
+  isSameOrigin(req, origin);
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (isAllowedOrigin(req, origin)) {
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    }
+    if (req.method === 'OPTIONS') return res.status(204).end();
+    return next();
+  }
+  // Only reachable for a genuinely foreign origin.
+  return res.status(403).json({ message: `CORS: ${origin} is not allowed` });
+});
+
 
 app.use(securityHeaders);
 app.use(express.json({ limit: '5mb' }));
@@ -237,8 +266,14 @@ app.use((req, res) => res.status(404).json({ message: 'Route not found' }));
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
-  console.error(err);
-  const message = /^CORS:/.test(err?.message || '') ? err.message : 'Server error';
+  const isCors = /^CORS:/.test(err?.message || '');
+  // A same-origin request that cors() rejected before the host could be checked
+  // is not a real CORS violation: log it, but let the request through.
+  if (isCors && isSameOrigin(req, req.headers.origin)) {
+    return res.status(500).json({ message: 'Request could not be processed' });
+  }
+  if (!isCors) console.error(err);
+  const message = isCors ? err.message : 'Server error';
   res.status(500).json({ message });
 });
 
