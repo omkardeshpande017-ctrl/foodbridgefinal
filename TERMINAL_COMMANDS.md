@@ -5,7 +5,7 @@
 npm run install-all
 
 # configure
-cp backend/.env.example backend/.env      # JWT_SECRET, ADMIN_EMAIL/ADMIN_PASSWORD, ADMIN2_*
+cp backend/.env.example backend/.env      # JWT_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD
 cp frontend/.env.example frontend/.env    # VITE_API_URL
 
 # database

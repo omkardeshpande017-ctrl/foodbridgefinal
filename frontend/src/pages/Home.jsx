@@ -18,7 +18,7 @@ export default function Home(){
     fetch(`${API}/analytics/public`)
       .then(r=>r.ok?r.json():Promise.reject(new Error('unavailable')))
       .then(setO)
-      .catch(()=>setO(false));
+      .catch((err)=>{console.error('[FoodBridge] public figures unavailable:', `${API}/analytics/public`, err && err.message);setO(false)});
   },[]);
 
   const loading=o===null;

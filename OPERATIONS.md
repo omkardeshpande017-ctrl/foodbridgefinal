@@ -3,10 +3,10 @@
 ## Local development with Docker MongoDB
 
 ```bash
-cp .env.example .env            # set JWT_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN2_*
+cp .env.example .env            # set JWT_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD
 JWT_SECRET=$(openssl rand -hex 32) docker compose up -d --build
 docker compose ps               # all three containers should report (healthy)
-docker compose exec api node src/seed.js   # provision the administrator(s)
+docker compose exec api node src/seed.js   # provision the one primary administrator
 ```
 
 - `foodbridge-mongo` — MongoDB 7, persistent volume `foodbridge_mongo_data`,
@@ -55,8 +55,9 @@ and enable the provider's automated daily snapshots with a 7–30 day retention.
 ## Administrator provisioning
 
 - Preferred: `npm run seed` (or `docker compose exec api node src/seed.js`) with
-  `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN2_*` in the environment. Idempotent — it
-  never deletes users or donations.
+  `ADMIN_EMAIL` / `ADMIN_PASSWORD` in the environment. Idempotent — it never deletes
+  users or donations, and it demotes every other admin-role account to `donor`, so
+  exactly one primary administrator exists at any time.
 - Serverless/first boot: set `SETUP_TOKEN`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` and start
   the API once (it provisions the admin automatically), or call
   `POST /api/setup/admin { token, email, password }`. Once an admin exists the

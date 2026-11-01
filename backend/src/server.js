@@ -58,12 +58,13 @@ const app = express();
 app.disable('x-powered-by');
 
 // CLIENT_URL may be a comma separated list of allowed origins.
-// Local development origins (any port, localhost or loopback) are always allowed
-// when the API is not running in production, so dev servers on other ports or
-// hosts do not break the frontend.
-const isLocalDevOrigin = (origin) =>
-  process.env.NODE_ENV !== 'production' &&
-  /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
+// Loopback origins (localhost / 127.0.0.1 / [::1]) are always allowed: they are
+// the developer's own machine, so a dev server on another port, a Docker-hosted
+// frontend on :8080 or a Vite dev server on :5173 can never break the API. This
+// does NOT widen exposure — a browser on the public internet cannot send an
+// Origin of localhost, and every other origin still has to be listed.
+const isLoopbackOrigin = (origin) =>
+  /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
 
 const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
   .split(',')
@@ -78,7 +79,7 @@ app.use(
         !origin ||
         allowedOrigins.includes('*') ||
         allowedOrigins.includes(origin) ||
-        isLocalDevOrigin(origin)
+        isLoopbackOrigin(origin)
       ) {
         return cb(null, true);
       }

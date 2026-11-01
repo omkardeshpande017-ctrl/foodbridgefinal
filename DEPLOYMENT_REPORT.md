@@ -201,3 +201,27 @@ connection, immutable asset caching via Vercel headers / nginx, Docker image hea
 With (1) and (2) the remaining work is: deploy, run `node backend/src/seed.js` against Atlas,
 and run `node backend/test/smoke.js https://<host>/api` to certify the live site — the same suite
 that passes 54/54 locally.
+
+---
+
+# Increment — 2026-11-02: Docker verified, single admin, CORS + HSTS fixes
+
+Commit: see `git log -1` (message: *FoodBridge production release — full-stack fixes, Docker and deployment*).
+
+| Item | Before | Now |
+|---|---|---|
+| Docker stack (`docker compose up -d --build`) | never executed (Docker absent) | **all three containers healthy**: `foodbridge-mongo`, `foodbridge-api`, `foodbridge-web` |
+| Administrator accounts | seed required **two** admins (`ADMIN2_*`) | **exactly one primary administrator** from `ADMIN_EMAIL`/`ADMIN_PASSWORD`; any other admin-role account is demoted to `donor` |
+| CORS from a non-listed local origin | rejected (`CORS: http://localhost:8081 is not allowed`) — the Docker frontend on :8080/:8081 could not call the API | loopback origins always allowed; every public origin still requires `CLIENT_URL` |
+| HSTS | sent on plain-HTTP responses, which pins `https://localhost` in the browser and breaks the HTTP API | only sent for TLS requests (`req.secure` / `X-Forwarded-Proto: https`) |
+| Host ports | hardcoded 27018/5001/8080 | `MONGO_HOST_PORT`, `API_HOST_PORT`, `WEB_HOST_PORT` (another local stack already held 27018 and 5001 on this machine) |
+| `NGO Verification` sidebar link | pointed at `/users`, identical to `Users` | deep-links `/users?filter=pending`, shows only NGOs awaiting a decision |
+| Home page fetch failure | swallowed silently | logs `[FoodBridge] public figures unavailable: <url> <error>` to the console |
+
+Verification on the Docker stack (`http://localhost:8081`, API `http://localhost:5002/api`):
+
+- `/api/health` → `{"status":"ok","database":"connected"}`; `/api/ready` → `{"ready":true}`
+- `smoke` **60/60**, `edge` **32/32**, `journey` **22/22** = **114/114 passed**
+- Admin login works, `role: admin` from the database; public `role: "admin"` registration is rejected
+- Data persists across `docker compose restart` (users and donations still present)
+- Frontend bundle contains the configured `VITE_API_URL`, not a localhost fallback

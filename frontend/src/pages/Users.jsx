@@ -1,4 +1,4 @@
-import{useEffect,useState}from'react';import{Link}from'react-router-dom';import Layout from'../components/Layout';import PageHeader from'../components/PageHeader';import{api}from'../services/api';import{Search,ShieldCheck,ShieldX,BadgeCheck,Loader2,ChevronLeft,ChevronRight}from'lucide-react';
+import{useEffect,useState}from'react';import{Link,useSearchParams}from'react-router-dom';import Layout from'../components/Layout';import PageHeader from'../components/PageHeader';import{api}from'../services/api';import{Search,ShieldCheck,ShieldX,BadgeCheck,Loader2,ChevronLeft,ChevronRight}from'lucide-react';
 
 const badge=(u)=>{
   if(u.role!=='ngo')return null;
@@ -11,6 +11,7 @@ export default function Users(){
   const [rows,setRows]=useState([]);
   const [meta,setMeta]=useState({total:0,pages:1});
   const [page,setPage]=useState(1);
+  const [params,setParams]=useSearchParams();
   const [role,setRole]=useState('');
   const [search,setSearch]=useState('');
   const [loading,setLoading]=useState(true);
@@ -26,6 +27,10 @@ export default function Users(){
     finally{setLoading(false)}
   }
   useEffect(()=>{setPage(1);load(1)},[role]);
+  // "NGO Verification" in the sidebar deep-links here with ?filter=pending:
+  // show only NGOs still awaiting a decision.
+  const pendingOnly=params.get('filter')==='pending';
+  const visible=pendingOnly?rows.filter(u=>u.role==='ngo'&&(u.verification?.status||'pending')==='pending'):rows;
 
   async function act(fn,id){
     setBusy(id);setError('');
@@ -34,7 +39,7 @@ export default function Users(){
   }
 
   return <Layout>
-    <PageHeader title="User Management" subtitle="Verify NGOs, manage access and monitor every account on the platform."/>
+    <PageHeader title={pendingOnly?'NGO Verification':'User Management'} subtitle={pendingOnly?'Organisations waiting for an administrator decision before they can accept donations.':'Verify NGOs, manage access and monitor every account on the platform.'} action={pendingOnly?<button className="btn btn-secondary" onClick={()=>setParams({})}>Show all accounts</button>:null}/>
     <div className="card p-4 mb-5 flex flex-col md:flex-row gap-3">
       <div className="relative flex-1"><Search className="absolute left-3 top-3 text-slate-400" size={18}/>
         <input className="input pl-10" placeholder="Search name or email…" value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>e.key==='Enter'&&load(1)}/></div>
@@ -50,7 +55,7 @@ export default function Users(){
         <th className="p-4 text-left">Name</th><th className="p-4 text-left">Email</th><th className="p-4 text-left">Role</th>
         <th className="p-4 text-left">Verification</th><th className="p-4 text-left">Status</th><th className="p-4 text-left">Actions</th>
       </tr></thead>
-      <tbody>{rows.map(u=><tr className="border-t" key={u._id}>
+      <tbody>{visible.length===0&&<tr><td colSpan="6" className="p-10 text-center text-slate-500">{pendingOnly?'No NGO is waiting for verification.':'No accounts match this filter.'}</td></tr>}{visible.map(u=><tr className="border-t" key={u._id}>
         <td className="p-4 font-bold">{u.name}<p className="text-xs text-slate-500 font-normal">{u.organization||u.location||''}</p></td>
         <td className="p-4">{u.email}</td>
         <td className="p-4 capitalize">{u.role}</td>

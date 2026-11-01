@@ -3,7 +3,7 @@ import{NavLink,useNavigate}from'react-router-dom';import{LayoutDashboard,PlusCir
 const common=[['Dashboard','/dashboard',LayoutDashboard],['Donate Food','/donate',PlusCircle],['My Donations','/donations',Package],['Analytics','/analytics',BarChart3],['Map & Route','/map',Map],['AI Insights','/ai',BrainCircuit],['Notifications','/notifications',Bell],['Profile','/profile',UserCircle]];
 const ngo=[['Nearby Donations','/nearby',HeartHandshake],['My Requests','/requests',Package],['Distribution','/distribution',Truck]];
 const vol=[['Pickup Tasks','/tasks',Truck]];
-const admin=[['Users','/users',Users],['NGO Verification','/users',BadgeCheck],['Disputes','/disputes',ShieldAlert],['Reports','/reports',FileText],['Audit Log','/audit',ScrollText],['Settings','/settings',Settings]];
+const admin=[['Users','/users',Users],['NGO Verification','/users?filter=pending',BadgeCheck],['Disputes','/disputes',ShieldAlert],['Reports','/reports',FileText],['Audit Log','/audit',ScrollText],['Settings','/settings',Settings]];
 
 export default function Sidebar(){
   const nav=useNavigate();const s=session();const role=s?.user?.role;

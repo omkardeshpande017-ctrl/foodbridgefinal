@@ -85,7 +85,16 @@ JWT_SECRET=$(openssl rand -hex 32) docker compose up -d --build
 docker compose exec api node src/seed.js
 ```
 
-- Web: http://localhost:8080 · API: http://localhost:5001/api · Mongo: `127.0.0.1:27018` (loopback only, password required)
+- Web: http://localhost:8080 · API: http://localhost:5001/api · Mongo: `127.0.0.1:27019` (password required)
+
+Host ports are configurable because another local stack may already own 27017/27018/5001/8080.
+Set them in `.env` (`MONGO_HOST_PORT`, `API_HOST_PORT`, `WEB_HOST_PORT`) and rebuild the web image
+with a matching `VITE_API_URL`, because that value is compiled into the browser bundle:
+
+```bash
+API_HOST_PORT=5002 WEB_HOST_PORT=8081 MONGO_HOST_PORT=27019 \
+  VITE_API_URL=http://localhost:5002/api docker compose up -d --build
+```
 
 ### Without Docker
 
@@ -96,8 +105,8 @@ npm run install-all
 # 2. configuration
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
-# edit backend/.env: JWT_SECRET (openssl rand -hex 32), ADMIN_EMAIL, ADMIN_PASSWORD,
-# ADMIN2_EMAIL, ADMIN2_PASSWORD (12+ chars each).
+# edit backend/.env: JWT_SECRET (openssl rand -hex 32), ADMIN_EMAIL, ADMIN_PASSWORD
+# (12+ chars). There is exactly ONE primary administrator.
 
 # 3. database (Docker)
 docker compose up -d mongo
@@ -118,9 +127,12 @@ MongoDB. There is no demo mode, no in-memory fallback and no default password an
 
 ## Accounts
 
-Public registration offers **Donor, NGO or Volunteer** only. Administrators are created by
-`npm run seed` from `ADMIN_EMAIL` / `ADMIN_PASSWORD` (and `ADMIN2_*` for a second admin) in
-`backend/.env`; the seed is idempotent and never deletes existing users or donations.
+Public registration offers **Donor, NGO or Volunteer** only. There is exactly **one primary
+administrator**, created by `npm run seed` from `ADMIN_EMAIL` / `ADMIN_PASSWORD` in the environment.
+The seed is idempotent, never deletes existing users or donations, and demotes any other account
+that holds the admin role to `donor`, so the platform can never end up with two primary admins.
+The administrator password is bcrypt-hashed (cost 12), is never printed, and is changed through
+`POST /api/auth/change-password`.
 
 ## Tests
 
@@ -130,16 +142,23 @@ node backend/test/smoke.js https://<host>/api   # against a deployment
 ADMIN_EMAIL=... ADMIN_PASSWORD=... npm test     # also runs the admin checks
 ```
 
-The suite registers a donor, NGO and volunteer, creates a donation, accepts it, assigns a volunteer,
+`npm test` registers a donor, NGO and volunteer, creates a donation, accepts it, assigns a volunteer,
 walks the delivery through picked up → in transit → delivered, then verifies analytics, insights,
-profile updates and the role-based denials (35 checks).
+profile updates, password management and the role-based denials.
+
+| Suite | Checks |
+|---|---|
+| `npm test` (API behaviour) | 60 |
+| `npm run test:edge` (permissions, abuse cases) | 32 |
+| `npm run test:journey` (donor → NGO → volunteer → admin) | 22 |
+| **Total** | **114** |
 
 ## Docker (full stack)
 
 ```bash
 export JWT_SECRET=$(openssl rand -hex 32)
 docker compose up -d --build
-docker compose exec api node src/seed.js      # provision admins inside the container
+docker compose exec api node src/seed.js      # provision the administrator inside the container
 ```
 
 - API: http://localhost:5001/api/health
@@ -181,7 +200,7 @@ Then provision the administrator once, from a machine with the same `MONGO_URI`:
 
 ```bash
 cd backend && MONGO_URI='mongodb+srv://…' ADMIN_EMAIL=… ADMIN_PASSWORD=… \
-  ADMIN2_EMAIL=… ADMIN2_PASSWORD=… JWT_SECRET=… node src/seed.js
+  JWT_SECRET=… node src/seed.js
 ```
 
 ### 3. Backend on a long-running host (alternative)
