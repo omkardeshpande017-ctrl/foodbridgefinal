@@ -125,6 +125,28 @@ npm run dev
 The API refuses to start without a valid `JWT_SECRET` (32+ characters) and without a reachable
 MongoDB. There is no demo mode, no in-memory fallback and no default password anywhere in the code.
 
+## Database collections and indexes
+
+`npm run db:init` creates every collection and index declared in the Mongoose schemas and the
+default platform settings document. It is idempotent: it never drops a collection, never deletes a
+document and never overwrites an existing setting. Run it after pointing `MONGO_URI` at a new
+database (or `docker compose exec api node src/init-db.js` inside the stack).
+
+| Collection | Purpose | Key indexes |
+|---|---|---|
+| `users` | Donors, NGOs, volunteers and the single administrator. NGO verification, volunteer availability, reset tokens. | unique `email`, `role`, `status`, `role+status`, `createdAt` |
+| `donations` | Donation lifecycle (`available → accepted → picked_up → in_transit → delivered`, plus `expired`/`cancelled`), history, timestamps. | `status`, `donorId`, `ngoId`, `volunteerId`, `expiresAt`, compound `status+createdAt` and per-role `+createdAt`, text index on food name/description/location |
+| `deliveries` | Pickup assignments and delivery tracking for a donation. | `volunteerId+createdAt`, `donationId` |
+| `notifications` | Per-user notifications with dedupe keys and read state. | `userId`, `read`, `userId+dedupeKey`, `userId+createdAt` |
+| `auditlogs` | Administrative and security activity log (who did what, when). | `actorId`, `action`, `entity`, `entityId`, `createdAt` |
+| `reports` | Disputes/incidents raised by users and triaged by admins. | `raisedBy`, `status`, `status+createdAt` |
+| `settings` | Platform settings document (`key: platform`). | unique `key` |
+
+NGOs and volunteers are `users` with `role: 'ngo'` / `role: 'volunteer'` — one identity model, so
+verification, suspension and audit apply to every role. Pickup assignments live in `deliveries`,
+which references the donation and the volunteer, so a donation can never have two conflicting
+active assignments.
+
 ## Accounts
 
 Public registration offers **Donor, NGO or Volunteer** only. There is exactly **one primary

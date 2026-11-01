@@ -18,7 +18,8 @@
     "check": "node --check backend/src/server.js && node --check backend/src/routes/auth.js && node --check backend/src/seed.js",
     "test:journey": "node backend/test/journey.js",
     "test:edge": "node backend/test/edge.js",
-    "test:all": "npm test && npm run test:edge && npm run test:journey"
+    "test:all": "npm test && npm run test:edge && npm run test:journey",
+    "db:init": "npm --prefix backend run db:init"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
